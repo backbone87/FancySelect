@@ -7,74 +7,131 @@
  * as expected. 
  */
 
+/* visually hidden, keeps tabindex intact */
+.gsReplaced {
+	border: 0;
+	clip: rect(0 0 0 0);
+	height: 1px;
+	margin: -1px;
+	overflow: hidden;
+	padding: 0;
+	position: absolute;
+	width: 1px;
+}
+
 /* The following rules set style for the <select> replacement 
  * Select is replaced by an inline <div class="fancy-select"> */
 
-div.fancy-select {
+.gsContainer {
 	display: inline-block; /* Needed to behave like a select element */
 	*display: inline; /* IE7 fix */
 	*zoom: 1; /* IE7 fix */
 	vertical-align: middle;
 	margin: 0;
-	overflow: hidden; /* For float clearing */
+	padding: 0;
 	cursor: pointer;
-	padding: 1px;
-	color: #333333;
-	background-color: #eeeeee;
-	border: 1px solid #dddddd;
-	font-weight: bold;
+	height: 100%;
 }
 
-/* This is the arrow on the right side. The triangle is 
- * rendered using a base64 encoded PNG :)
- * See the magic here: http://ptrn.it/x0Hdzg */
+.gsContainer:before {
+	content: " ";
+	display: inline;
+}
+.gsContainer:after {
+	content: " ";
+	display: inline;
+}
 
-div.fancy-select .arrow {
+.gsContainer .gsInner {
 	display: block;
+	position: relative;
+	margin: 0;
+	padding: 0;
+	-webkit-border-radius: 3px;
+	-moz-border-radius: 3px;
+	border-radius: 3px;
+	background-color: #fff;
+	border: 1px solid #c8c8c8;
 	float: left;
-	height: 16px;
+}
+
+.gsContainer .gsToggler {
+	margin: 0;
+	padding: 1px;
+	
+}
+
+.gsContainer.gsOpen .gsToggler {
+	-webkit-border-radius: 3px 3px 0 0;
+	-moz-border-radius: 3px 3px 0 0;
+	border-radius: 3px 3px 0 0;
+	border-bottom: none;
+}
+
+.gsContainer .gsSelection {
+/* 	overflow: hidden; */
+	margin: 0;
+	padding: 0;
+/* 	height: 1.5em; */
+}
+
+.gsContainer .gsArrow {
+	float: right;
+	height: 100%;
 	width: 16px;
-	margin: 8px;
 	background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAANElEQVQImXXLwQkAIAxD0b9TFnSnDKgXCyXWDz2U8AAM7OEMoM8obqlNK7WIPKnUj6pWfw5v3BfTx+n+2AAAAABJRU5ErkJggg==');
-	background-position: 5px 5px;
+	background-position: center center;
 	background-repeat: no-repeat;
 }
 
 /* The following rule set style for the dropdown list,
  * which is a <ul class="fancy-select"> */
 
-ul.fancy-select {
-	margin: 0; /* Reccomended! */
+.gsContainer .gsList {
+	display: block;
+	float: left;
+	clear: both;
 	padding: 0;
+	overflow: auto;
+	max-height: 15em;
+/* 	visibility: hidden; */
+	margin: -1px;
+	height: 1px;
 }
 
-ul.fancy-select li {
+.gsContainer.gsOpen .gsList {
+	visibility: visible;
+	margin: 0;
+	height: auto;
+}
+
+.gsContainer li {
+	display: block;
 	margin: 0;
 	padding: 1px;
-	list-style-type: none; /* We do not need bullets */
-	border: 1px solid #dddddd;
-	background-color: #eeeeee;
-	overflow: hidden; /* For float clearing */
-	border-top: none; /* Avoid double-borders */
-	cursor: pointer;
-	*width: 150px; /* IE7 fix, we HAVE TO se fixed with :( */
-	*margin-bottom: -3px; /* IE7 fix */
+	list-style-type: none;
+	border-top: 1px solid #000;
+	overflow: hidden;
 }
 
-ul.fancy-select li:hover {
-	background-color: #f6f6f6;
+.gsContainer li:first-child {
+	border: none;
+}
+
+.gsContainer .gsMarked {
+	background-color: #ebfdd7;
 }
 
 /* This is for the currently selected option */
 
-ul.fancy-select li.selected {
+.gsContainer .gsSelected {
 	background-color: #ddeeff;
 	font-weight: bold;
 }
 
 /* This is for the disabled options */
 
-ul.fancy-select li.disabled {
+.gsContainer .gsDisabled {
 	background-color: #dddddd;
 	color: #666666;
 	cursor: default;
@@ -83,30 +140,11 @@ ul.fancy-select li.disabled {
 /* The following rules set style for inner content of the <select> 
  * replacement and the dropdown list. Just an image and a text left-floated */
 
-.fancy-select .image {
-	display: block;
-	float: left;
-	width: 32px;
-	height: 32px;
+.gsContainer .gsImage {
+	height: 1.5em;
 }
 
-.fancy-select .text {
-	display: block;
-	float: left;
-	height: 32px;
-	line-height: 32px;
-	padding: 0 10px;
-}
-
-/* Some rules to have bigger images for "fancy-select-big" class */
-
-ul.fancy-select-big li .image {
-	display: block;
-	float: left;
-	width: 64px;
-	height: 64px;
-}
-
-ul.fancy-select-big li {
-	*width: 64px; /* IE7 fix, we HAVE TO se fixed with :( */
+.gsContainer .gsText {
+	height: 1.5em;
+	padding: 0 5px 0 10px;
 }

@@ -1,241 +1,386 @@
-/*
----
-description: A non-obtrusive image dropdown menu that extends and replaces a standard HTML Select control. 
-
-license: MIT-style
-
-authors:
-- Lorenzo Stanco
-
-requires:
-- core/1.4.1: '*'
-
-provides: [FancySelect]
-
-...
-*/
-
-var FancySelect = new Class({
-
-	Implements: [Options, Events],
-
-	options: {
-		legacyEvents: false,
-		showText: true,
-		showImages: true,
-		className: 'fancy-select',
-		offset: { x: 0, y: 0 },
-		autoHide: false,
-		autoScrollWindow: false,
-		animateFade: true,
-		animateSlide: true,
-		fx: { 'duration': 'short' }
-	},
-
-	initialize: function(element, options) {
+(function($, $$, undef) {
 	
-		this.setOptions(options);
-		/*if (!Fx.Slide)*/ this.options.animateSlide = false; // Need review
-		this.element = document.id(element);
-		this.element.store('fancyselect_object', this);
-		this._create();
-		this.attach();
-		
-		// Auto-scroll when FancySelect is out of viewport
-		if (this.options.autoScrollWindow) this.addEvent('show', function() {
-			var windowScroll = window.getScroll();
-			var overflow = this.ul.getPosition().y + this.ul.getSize().y - window.getSize().y - windowScroll.y;
-			if (overflow > 0) window.scrollTo(windowScroll.x, windowScroll.y + overflow + 10);
-		});
-		
-		// Auto-hide the dropdown menu when user clicks outside
-		if (this.options.autoHide) document.addEvent('click', function(e) {
-			if (!this.shown) return;
-			var target = document.id(e.target);
-			var parents = target.getParents().include(target);
-			if (!parents.contains(this.ul) && !parents.contains(this.div)) this.hide();
-		}.bind(this));
-		
-		return this;
-		
-	},
-
-	attach: function() {
-		this.element.setStyle('display', 'none');
-		this.select(this.element.get('value')); // Select current item
-		if (Browser.ie) window.addEvent('load', function() { this.select(this.element.get('value')); }.bind(this)); // IE refresh fix
-		this.ul.fade('hide').inject(document.id(document.body));
-		this.div.inject(this.element, 'after');
-		this.attached = true;
-		this.fireEvent('attach');
-		return this;
-	},
-
-	detach: function() {
-		if (this.ul) this.ul.dispose();
-		if (this.div) this.div.dispose();
-		this.element.setStyle('display', '');
-		this.attached = false;
-		this.fireEvent('detach');
-		return this;
-	},
+	DOMEvent.definePseudo("not", function(split, fn, args) {
+		if(split.value && args[0]) {
+			var target = $(args[0].target);
+			if(target && target.match(split.value) || target.getParent(split.value)) return;
+		}
+		fn.apply(args);
+	});
 	
-	select: function(value) {
-		// Update hidden <select>
-		if(this.element.get('value') != value) {
-			this.element.set('value', value);
-			if(this.options.legacyEvents) {
-				this.element.fireEvent('change');
-				this.element.getParents().fireEvent('change');
+	var TRUE = true,
+		contains = function(item) { return this.contains(item); },
+		notContains = function(item) { return !this.contains(item); },
+		GraphicalSelect = {};
+	
+	GraphicalSelect.Implements = [ Options, Events, Class.Occlude ];
+	GraphicalSelect.Binds = [ "getOption", "open", "close", "toggle", "_select", "_closeNoFocus", "_markNext", "_markPrevious", "_mark" ];
+	
+	GraphicalSelect.options = {
+		legacy: TRUE,
+		text: TRUE,
+		image: TRUE,
+		scroll: TRUE, // TODO
+		hide: TRUE,
+//		circle: undef,
+//		css: undef,
+		data: TRUE
+	};
+	
+	GraphicalSelect.initialize = function(element, options, detached) {
+		var self = this, occluded = undef;
+		
+		self.element = element = $(element);
+		if(!element || element.get("tag") != "select") return;
+		if(self.occlude("graphicalSelect", element)) {
+			self = self.occluded;
+			occluded = TRUE;
+		} else {
+			self.id = "gs" + String.uniqueID();
+			self.selected = new Elements();
+		}
+		
+		if((!occluded && options == TRUE) || (options && options.data)) {
+			self.setOptions(JSON.decode(self.element.get("data-gsOptions")));
+		}
+		
+		self.setOptions(options);
+		if(detached || occluded) self.update();
+		else self.attach(TRUE);
+		
+		return self;
+	};
+
+	GraphicalSelect.attach = function(update) {
+		var self = this;
+		if(self.attached) return self;
+		self.attached = TRUE;
+		
+		if(!self.container) {
+			self.container = new Element("div.gsContainer")
+				.set("id", self.id)
+				.addEvent("click:relay(.gsToggler)", self.toggle)
+				.addEvent("click:relay(li:not(.gsGroup))", self._select)
+				.addEvent("mouseenter:relay(li:not(.gsGroup))", self._mark);
+			if(self.options.css) self.container.addClass(self.options.css);
+			self.inner = new Element("div.gsInner").inject(self.container);
+			self._drawToggler();
+		}
+		
+		self.select(self.element.getSelected(), undef, TRUE);
+		
+		self.element.addClass("gsReplaced");
+		self.container.inject(self.element, "after");
+		
+//		if (Browser.ie) window.addEvent('load', function() { this.select(this.element.get('value')); }.bind(this)); // IE refresh fix
+
+		if(self.options.hide) document.addEvent("click:not(#" + self.id + ")", self._closeNoFocus);
+		document.addEvent("keydown:keys(esc)", self.close);
+		self.element.addEvent("focus", self.open);
+		self.element.addEvent("keydown:keys(tab)", self.close);
+		self.element.addEvent("keydown:keys(up)", self._markPrevious);
+		self.element.addEvent("keydown:keys(down)", self._markNext);
+		self.element.addEvent("keydown:keys(enter)", self._select);
+		return self.fireEvent("attach");
+	};
+
+	GraphicalSelect.detach = function() {
+		var self = this;
+		if(!self.attached) return;
+		
+		document.removeEvent("click:not(#" + self.id + ")", self._closeNoFocus);
+		document.removeEvent("keydown:keys(esc)", self.close);
+		self.element.removeEvent("focus", self.open);
+		self.element.removeEvent("keydown:keys(tab)", self.close);
+		self.element.removeEvent("keydown:keys(up)", self._markPrevious);
+		self.element.removeEvent("keydown:keys(down)", self._markNext);
+		self.element.removeEvent("keydown:keys(enter)", self._select);
+		self.close();
+		
+		self.container.dispose();
+		self.element.removeClass("gsReplaced");
+
+		self.attached = undef;
+		
+		return self.fireEvent("detach");
+	};
+	
+	// TODO
+	GraphicalSelect.update = function(redraw) {
+		var self = this;
+//		if(!self.attached) return;
+//		if(self.opened) drawList(self);
+//		drawSelection(self);
+		return self;
+	};
+	
+	GraphicalSelect.getOption = function(value) {
+		var self = this, tag;
+		if(typeof value == "string") {
+			return self.element.getElement('option[value="' + value + '"]');
+		}
+		
+		value = $(value);
+		if(!value) return;
+		
+		tag = value.get("tag");
+		if(tag == "option") {
+			return value.getParents().contains(self.element) ? value : undef;
+		}
+		
+		if(!self.list) return;
+		
+		if(tag != "li") {
+			value = value.getParent("li");
+			if(!value) return;
+		}
+		
+		value = value.retrieve("gsOption");
+		return value && value.getParents().contains(self.element) ? value : undef;
+	};
+	
+	GraphicalSelect.select = function(selected, mode, silent) {
+		var self = this, i, j, item;
+		if(!self.attached) return self;
+		
+		selected = Array.from(selected);
+		if(!self.multiple) selected.length = 1;
+		selected = selected.map(self.getOption).clean();
+
+		if(self.multiple) {
+			if(mode == "deselect") {
+				if(!selected.length) return self;
+				selected = self.selected.filter(notContains, selected);
+				
+			} else if(mode == "invert") {
+				if(!selected.length) return self;
+				for(i = 0; i < self.selected.length; i++) {
+					item = self.selected[i];
+					for(j = 0; j < selected.length; j++) if(selected[j] == item) {
+						selected.splice(j, 1);
+						item = undef;
+						break;
+					}
+					if(item) selected.push(item);
+				}
+				
+			} else if(mode == "add") {
+				if(!selected.length) return self;
+				selected.combine(self.selected);
+			}
+			
+			if(self.selected.length == selected.length
+			&& !self.selected.filter(contains, selected).length) {
+				return self;
+			}
+			
+		} else if(!selected.length || selected[0] == self.selected[0]) {
+			return self;
+		}
+		
+		selected = new Elements(selected);
+		self._drawSelection(selected);
+		self.selected.set("selected", undef);
+		self.selected = selected;
+		self.selected.set("selected", TRUE);
+		
+		if(!silent && self.options.legacy) {
+			self.element.fireEvent("change").getParents().fireEvent("change");
+		}
+		
+		return self;
+	};
+
+	GraphicalSelect.open = function(nofocus) {
+		var self = this;
+		if(self.attached && !self.opened) {
+			if(!self.list) self._drawList();
+			if(!nofocus) self.element.focus();
+			if(self.marked) {
+				self.marked.removeClass("gsMarked");
+				self.marked = undef;
+			}
+			self.container.addClass("gsOpen");
+			if(self.selected.length) {
+				self.marked = self.selected[0].retrieve("gsItem").addClass("gsMarked");
+				self._scrollToItem(self.marked);
+			}
+			self.opened = TRUE;
+			self.fireEvent("open");
+		}
+		return self;
+	};
+	
+	GraphicalSelect.close = function(nofocus) {
+		var self = this;
+		if(self.attached && self.opened) {
+			if(!nofocus) self.element.focus();
+			self.container.removeClass("gsOpen");
+			self.opened = undef;
+			self.fireEvent("close");
+		}
+		return self;
+	};
+	
+	GraphicalSelect.toggle = function() {
+		return this[this.opened ? "close" : "open"]();
+	};
+	
+	GraphicalSelect._select = function(event, target) {
+		if(!target) target = this.marked;
+		if(!target) return;
+		this.select(target);
+		this.close();
+		event.preventDefault();
+	};
+	
+	GraphicalSelect._closeNoFocus = function() {
+		this.close(TRUE);
+	};
+	
+	GraphicalSelect._getFirst = function(group) {
+		if(group) return group.getElement("li:not(.gsGroup)");
+	};
+	
+	GraphicalSelect._getLast = function(group) {
+		if(group) {
+			var last = group.getLast("li");
+			while(last) {
+				if(!last.match(".gsGroup")) return last;
+				group = last;
+				last = this._getLast(group);
+				if(last) return last;
+				last = group.getPrevious("li");
 			}
 		}
-		if (this.options.showText) this.div.getElement('span.text').set('text', this.selectOptions[value].text);
-		if (this.options.showImages) this.div.getElement('img.image').setProperties({
-			'src': this.selectOptions[value].image,
-			'alt': this.selectOptions[value].alt
-		});
-		if (this.ul) {
-			this.ul.getElements('li').each(function(li) {
-				if (li.getProperty('data-value') == value) li.addClass('selected');
-				else li.removeClass('selected');
-			});
-		}
-		return this;
-	},
+	};
 	
-	update: function() {
-		var attached = this.attached;
-		this.detach();
-		this._create(); // Re-create
-		if (attached) this.attach(); // Re-attach if needed
-		return this;
-	},
-
-	show: function() {
-		var offset = this.options.offset;
-		var position = this.div.getCoordinates();
-		this.ul.setStyles({
-			'top': position.top + position.height + offset.y,
-			'left': position.left + offset.x });
-		this._animate(false);
-		this.shown = true;
-		this.fireEvent('show');
-		return this;
-	},
-	
-	hide: function() {
-		this._animate(true);
-		this.shown = false;
-		this.fireEvent('hide');
-		return this;
-	},
-	
-	toggle: function() {
-		if (this.shown) return this.hide();
-		else return this.show();
-	},
-	
-	_create: function() {
-		
-		var o = this.options;
-		
-		if (this.ul) this.ul.destroy();
-		if (this.div) this.div.destroy();
-		
-		// Create options array
-		this.selectOptions = {};
-		this.element.getElements('option').each(function(option) {
-			var value = option.getProperty('value');
-			this.selectOptions[value] = {};
-			if (option.get('disabled')) this.selectOptions[value].disabled = true;
-			if (o.showText) this.selectOptions[value].text = option.get('text');
-			if (o.showImages) {
-				this.selectOptions[value].image = option.getProperty('data-image');
-				this.selectOptions[value].alt = option.getProperty('data-alt');
+	GraphicalSelect._getNext = function(item) {
+		if(item) do {
+			var next = item.getNext("li");
+			if(!next) {
+				item = item.getParent("li.gsGroup");
+			} else {
+				if(next.match(".gsGroup")) next = this._getFirst(item = next);
+				if(next) return next;
 			}
-		}.bind(this));
-		
-		// Create <li> elements
-		this.ul = new Element('ul').addClass(o.className);
-		Object.each(this.selectOptions, function(option, value) {
-			var li = new Element('li', { 'data-value': value });
-			if (option.disabled) li.addClass('disabled');
-			if (o.showImages && option.image) li.adopt(new Element('img.image', { 'src': option.image, 'alt': option.alt }));
-			if (o.showText && option.text) li.adopt(new Element('span.text', { 'text': option.text }));
-			li.addEvent('click', function() { 
-				if (li.hasClass('disabled')) return;
-				this.select(li.getProperty('data-value')); 
-				this.hide(); 
-			}.bind(this));
-			this.ul.adopt(li);
-		}.bind(this));
-		
-		// Force <ul> custom positioning
-		this.ul.setStyles({ position: 'absolute', top: 0, left: 0 });
-		if (o.animateFade) this.ul.set('tween', o.fx);
-		if (o.animateSlide) this.ul.set('slide', o.fx);
-		
-		// Create <div> replacement for select
-		this.div = new Element('div').addClass(o.className);
-		if (o.showImages) this.div.adopt(new Element('img.image'));
-		if (o.showText) this.div.adopt(new Element('span.text'));
-		this.div.adopt(new Element('span.arrow'));
-		this.div.addEvent('click', function() { this.toggle(); }.bind(this));
-		
-		return this;
-		
-	},
+		} while(item);
+	};
 	
-	_animate: function(out) {
-		var o = this.options;
-		if (o.animateFade) this.ul.fade(out ? 'out' : 'in');
-		if (o.animateSlide) this.ul.slide(out ? 'out' : 'in');
-		if (!o.animateFade && !o.animateSlide) this.ul.fade(out ? 'hide' : 'show');
-		return this;
-	}
+	GraphicalSelect._getPrevious = function(item) {
+		if(item) do {
+			var previous = item.getPrevious("li");
+			if(!previous) {
+				item = item.getParent("li.gsGroup");
+			} else {
+				if(previous.match(".gsGroup")) previous = this._getLast(item = previous);
+				if(previous) return previous;
+			}
+		} while(item);
+	};
 	
-});
+	GraphicalSelect._markNext = function() {
+		var self = this, next = self._getNext(self.marked);
+		if(!next && self.options.circle) next = self._getFirst(self.list);
+		if(next) self._mark(undef, next);
+	};
+	
+	GraphicalSelect._markPrevious = function() {
+		var self = this, previous = self._getPrevious(self.marked);
+		if(!previous && self.options.circle) previous = self._getLast(self.list);
+		if(previous) self._mark(undef, previous);
+	};
+	
+	GraphicalSelect._mark = function(event, target) {
+		var self = this;
+		if(self.marked) self.marked.removeClass("gsMarked");
+		self.marked = target.addClass("gsMarked");
+		self._scrollToItem(self.marked);
+	};
+	
+	GraphicalSelect._scrollToItem = function(item) {
+		var self = this, target = item.getPosition(self.list), current = self.list.getScroll(), size;
+		if(target.y < 0) return self.list.scrollTo(current.x, current.y + target.y);
+		target.y += item.getSize().y;
+		size = self.list.getSize();
+		if(target.y > size.y) self.list.scrollTo(current.x, current.y + target.y - size.y);
+	};
+	
+	GraphicalSelect._drawSelection = function(selected) {
+		var self = this;
+		self.selection.empty();
+		if(selected[0]) self._drawLabel(selected[0], self.selection);
+	};
+		
+	GraphicalSelect._drawToggler = function() {
+		var self = this, toggler = self.toggler;
+		if(toggler) toggler.destroy();
+		self.toggler = toggler = new Element("div.gsToggler").inject(self.inner);
+		self.selection = new Element("div.gsSelection").inject(toggler);
+		new Element("div.gsArrow").inject(toggler);
+	};
+	
+	GraphicalSelect._drawList = function() {
+		var self = this, list = self.list;
+		if(list) list.destroy();
+		self.list = list = new Element("ul.gsList").inject(self.inner);
+		self._parseOptions(self.element, list);
+	};
 
-Elements.implement({
+	GraphicalSelect._parseOptions = function(element, container) {
+		var children = element.getChildren(), tag, i;
+		for(i = 0; i < children.length; i++) {
+			element = $(children[i]);
+			tag = element.get("tag");
+			if(tag == "option") this._drawOption(element, container);
+			else if(tag == "optgroup") this._drawOptgroup(element, container);
+		}
+	};
 	
-	fancySelect: function(options) {
-		this.each(function(el) { new FancySelect(el, options); });
-		return this;
-	}
+	GraphicalSelect._drawOptgroup = function(element, container) {
+		var self = this;
+		if(self.options.group) {
+			container = new Element("li.gsGroup").inject(container);
+			container = new Element("div.gsLabel").inject(container);
+			self._drawLabel(element, container);
+			container = new Element("ul").inject(container, "after");
+		}
+		self._parseOptions(element, container);
+	};
 	
-});
-
-Element.implement({
+	GraphicalSelect._drawOption = function(element, container) {
+		var self = this;
+		container = new Element("li").inject(container);
+		container.set("data-value", element.get("value")).store("gsOption", element);
+		element.store("gsItem", container);
+		self._drawLabel(element, container);
+		if(element.get("disabled")) container.addClass("gsDisabled");
+	};
 	
-	fancySelect: function(options) {
-		new FancySelect(document.id(this), options);
-		return this;
-	},
+	GraphicalSelect._drawLabel = function(element, container) {
+		var self = this, image = undef, html = undef;
+		if(self.options.image) {
+			image = element.get("data-image");
+			if(image) image = new Element("img.gsImage").set("src", image).set("alt", element.get("data-alt"));
+		}
+		if(self.options.text || !image) {
+			if(self.options.html) html = element.get("data-html");
+			if(html) container.set("html", html);
+			else new Element("span.gsText").set("text", element.get("text")).inject(container);
+		}
+		if(image) image.inject(container, self.options.image == "bottom" ? "bottom" : "top");
+	};
 	
-	fancySelectShow: function() {
-		var fs = this.retrieve('fancyselect_object');
-		if (fs) fs.show(this);
-		return this;
-	},
+	if(!window.bbit) bbit = {};
+	if(!bbit.mt) bbit.mt = {};
+	bbit.mt.GraphicalSelect = GraphicalSelect = new Class(GraphicalSelect);
 	
-	fancySelectHide: function() {
-		var fs = this.retrieve('fancyselect_object');
-		if (fs) fs.hide(this);
-		return this;
-	},
+	Element.implement("graphicalSelect", function(options, detached) {
+		return new GraphicalSelect(this, options == undef ? TRUE : options, detached);
+	});
 	
-	fancySelectToggle: function() {
-		var fs = this.retrieve('fancyselect_object');
-		if (fs) fs.toggle(this);
-		return this;
-	}
+	GraphicalSelect.auto = function() { $$("select.GraphicalSelect").graphicalSelect(); };
 	
-});
-
-Element.Properties.fancySelect = {
- 
-    get: function() {
-        return this.retrieve('fancyselect_object');
-    }
- 
-};
+	window.addEvent("domready", GraphicalSelect.auto);
+	
+})(document.id, window.$$);
