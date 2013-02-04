@@ -14,17 +14,18 @@
 		GraphicalSelect = {};
 	
 	GraphicalSelect.Implements = [ Options, Events, Class.Occlude ];
-	GraphicalSelect.Binds = [ "getOption", "open", "close", "toggle", "_select", "_closeNoFocus", "_markNext", "_markPrevious", "_mark" ];
+	GraphicalSelect.Binds = "getOption open close toggle _select _closeNoFocus _markNext _markPrevious _mark".split(" ");
 	
 	GraphicalSelect.options = {
 		legacy: TRUE,
 		text: TRUE,
 		image: TRUE,
-		scroll: TRUE, // TODO
 		hide: TRUE,
+//		size: undef,
 //		circle: undef,
 //		css: undef,
-		data: TRUE
+//		data: TRUE,
+		scroll: TRUE // TODO
 	};
 	
 	GraphicalSelect.initialize = function(element, options, detached) {
@@ -62,6 +63,10 @@
 				.addEvent("click:relay(.gsToggler)", self.toggle)
 				.addEvent("click:relay(li:not(.gsGroup))", self._select)
 				.addEvent("mouseenter:relay(li:not(.gsGroup))", self._mark);
+			if(self.options.size) {
+				self.size = self.element.measure(self.element.getSize);
+				self.container.setStyle("width", self.size.x).setStyle("height", self.size.y);
+			}
 			if(self.options.css) self.container.addClass(self.options.css);
 			self.inner = new Element("div.gsInner").inject(self.container);
 			self._drawToggler();

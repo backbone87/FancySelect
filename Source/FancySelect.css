@@ -7,6 +7,11 @@
  * as expected. 
  */
 
+select {
+	border: none;
+	padding: 0px;
+}
+
 /* visually hidden, keeps tabindex intact */
 .gsReplaced {
 	border: 0;
@@ -26,59 +31,56 @@
 	display: inline-block; /* Needed to behave like a select element */
 	*display: inline; /* IE7 fix */
 	*zoom: 1; /* IE7 fix */
-	vertical-align: middle;
+	vertical-align: top;
 	margin: 0;
 	padding: 0;
 	cursor: pointer;
 	height: 100%;
 }
 
-.gsContainer:before {
-	content: " ";
-	display: inline;
-}
-.gsContainer:after {
-	content: " ";
-	display: inline;
-}
-
 .gsContainer .gsInner {
 	display: block;
 	position: relative;
+	overflow: hidden;
+	box-sizing: border-box;
+	width: 100%;
 	margin: 0;
 	padding: 0;
 	-webkit-border-radius: 3px;
 	-moz-border-radius: 3px;
 	border-radius: 3px;
-	background-color: #fff;
 	border: 1px solid #c8c8c8;
-	float: left;
+	background-color: #fff;
+	white-space: nowrap;
 }
 
 .gsContainer .gsToggler {
-	margin: 0;
-	padding: 1px;
-	
+	margin: 1px;
+	padding: 0;
+	float: left;
 }
 
 .gsContainer.gsOpen .gsToggler {
-	-webkit-border-radius: 3px 3px 0 0;
-	-moz-border-radius: 3px 3px 0 0;
-	border-radius: 3px 3px 0 0;
-	border-bottom: none;
+/* 	-webkit-border-radius: 3px 3px 0 0; */
+/* 	-moz-border-radius: 3px 3px 0 0; */
+/* 	border-radius: 3px 3px 0 0; */
+/* 	border-bottom: none; */
 }
 
 .gsContainer .gsSelection {
-/* 	overflow: hidden; */
-	margin: 0;
+	margin: 0 20% 0 0;
 	padding: 0;
-/* 	height: 1.5em; */
+	float: left;
 }
 
 .gsContainer .gsArrow {
-	float: right;
+	position: absolute;
+	right: 0;
+	top: 0;
 	height: 100%;
-	width: 16px;
+	width: 20%;
+	margin: 0;
+	padding: 0;
 	background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAANElEQVQImXXLwQkAIAxD0b9TFnSnDKgXCyXWDz2U8AAM7OEMoM8obqlNK7WIPKnUj6pWfw5v3BfTx+n+2AAAAABJRU5ErkJggg==');
 	background-position: center center;
 	background-repeat: no-repeat;
@@ -110,7 +112,7 @@
 	margin: 0;
 	padding: 1px;
 	list-style-type: none;
-	border-top: 1px solid #000;
+/* 	border-top: 1px solid #000; */
 	overflow: hidden;
 }
 
@@ -142,6 +144,7 @@
 
 .gsContainer .gsImage {
 	height: 1.5em;
+	vertical-align: text-bottom;
 }
 
 .gsContainer .gsText {
